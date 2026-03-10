@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gan Teorainn KPI Tracker</title>
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body {
+  background: #f2f5f9;
+  font-family: 'Segoe UI', sans-serif;
+  padding: 20px;
+}
+
+h1, h2 {
+  color: #0b2a4a;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(25px, 1fr));
+  gap: 2px;
+  margin-bottom: 20px;
+}
+
+.grid-box {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #fff;
+  border: 1px solid #c6dfff;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.grid-box.active {
+  background: #0b2a4a;
+  color: #fff;
+  font-weight: bold;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1 class="text-center mb-4">Gan Teorainn KPI Tracker</h1>
+
+  <h2 class="text-center mb-3">Click each box when you say hello</h2>
+  <div class="grid-container" id="helloGrid"></div>
+  <div class="d-flex justify-content-center mb-4">
+    <button id="resetGrid" class="btn btn-primary">Reset Grid</button>
+  </div>
+
+  <h2 class="text-center mb-3">Hourly KPI Table (Manual Input)</h2>
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped text-center" id="kpiTable">
+      <thead class="table-light">
+        <tr>
+          <th>Hour</th>
+          <th>Attempts</th>
+          <th>BTS</th>
+          <th>CFS</th>
+          <th>Closed</th>
+          <th>Form</th>
+          <th>Donor</th>
+        </tr>
+      </thead>
+      <tbody id="kpiTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// --- LocalStorage for KPI data ---
+let kpiData = JSON.parse(localStorage.getItem('kpiData')) || {}; 
+
+const totalBoxes = 600;
+const helloGrid = document.getElementById('helloGrid');
+
+// --- Function to get Irish time hour (11-19h) ---
+function getIrishHour() {
+  const now = new Date();
+  let utcHour = now.getUTCHours();
+  // offset in hours: local Irish time
+  const offset = now.getTimezoneOffset() / 60;
+  let hour = Math.round(utcHour - offset);
+  if (hour < 11) hour = 11;
+  if (hour > 19) hour = 19;
+  return hour;
+}
+
+// --- Generate 600 grid boxes ---
+for (let i = 1; i <= totalBoxes; i++) {
+  const box = document.createElement('div');
+  box.classList.add('grid-box');
+  box.textContent = i;
+  box.addEventListener('click', () => {
+    box.classList.toggle('active');
+    updateAttempts();
+  });
+  helloGrid.appendChild(box);
+}
+
+// Reset grid
+document.getElementById('resetGrid').addEventListener('click', () => {
+  document.querySelectorAll('.grid-box').forEach(b => b.classList.remove('active'));
+  updateAttempts();
+});
+
+// --- Generate KPI table rows (11-19h) ---
+const kpiTableBody = document.getElementById('kpiTableBody');
+for (let hour = 11; hour <= 19; hour++) {
+  const row = document.createElement('tr');
+  const hourCell = document.createElement('td');
+  hourCell.textContent = hour;
+  row.appendChild(hourCell);
+
+  ['attempts','bts','cfs','closed','form','donor'].forEach(metric => {
+    const cell = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = 0;
+    input.placeholder = '0';
+    input.classList.add('form-control', 'form-control-sm');
+
+    // restore saved value
+    if (kpiData[hour] && kpiData[hour][metric] != null) {
+      if (metric === 'attempts') input.value = kpiData[hour][metric].length;
+      else input.value = kpiData[hour][metric];
+    }
+
+    // save manual input
+    input.addEventListener('input', () => {
+      if (!kpiData[hour]) kpiData[hour] = {};
+      if (metric === 'attempts') return; // attempts handled by grid
+      kpiData[hour][metric] = parseInt(input.value) || 0;
+      localStorage.setItem('kpiData', JSON.stringify(kpiData));
+    });
+
+    cell.appendChild(input);
+    row.appendChild(cell);
+  });
+
+  kpiTableBody.appendChild(row);
+}
+
+// --- Update Attempts column from grid ---
+function updateAttempts() {
+  const currentHour = getIrishHour();
+  const activeBoxes = Array.from(document.querySelectorAll('.grid-box.active'));
+  const boxNumbers = activeBoxes.map(b => parseInt(b.textContent));
+
+  if (!kpiData[currentHour]) kpiData[currentHour] = {};
+  kpiData[currentHour]['attempts'] = boxNumbers;
+
+  const row = kpiTableBody.children[currentHour - 11];
+  const attemptsInput = row.children[1].querySelector('input');
+  attemptsInput.value = boxNumbers.length;
+
+  localStorage.setItem('kpiData', JSON.stringify(kpiData));
+}
+
+// --- Restore grid from saved attempts ---
+function restoreGrid() {
+  const currentHour = getIrishHour();
+  if (kpiData[currentHour] && kpiData[currentHour]['attempts']) {
+    const activeNumbers = kpiData[currentHour]['attempts'];
+    document.querySelectorAll('.grid-box').forEach(b => {
+      const num = parseInt(b.textContent);
+      if (activeNumbers.includes(num)) b.classList.add('active');
+      else b.classList.remove('active');
+    });
+  }
+}
+
+// Run restore on load
+restoreGrid();
+updateAttempts();
+</script>
+
+</body>
+</html>
